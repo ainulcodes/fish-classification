@@ -105,7 +105,10 @@ class MockBettaCNN:
     def predict(self, image_array):
         """Mock prediction with realistic confidence scores"""
         # Simulate CNN prediction with weighted random selection
-        weights = [0.25, 0.20, 0.15, 0.10, 0.08, 0.07, 0.05, 0.04, 0.03, 0.02, 0.01, 0.01]
+        weights = [0.25, 0.20, 0.15, 0.10, 0.08, 0.07, 0.05, 0.04, 0.03, 0.02, 0.005, 0.005]
+        # Normalize weights to ensure they sum to 1.0
+        weights = np.array(weights)
+        weights = weights / weights.sum()
         selected_idx = np.random.choice(len(self.betta_types), p=weights)
         
         # Generate realistic confidence score (higher for common types)
