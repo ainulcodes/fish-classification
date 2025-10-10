@@ -179,7 +179,7 @@ async def init_sample_data():
             "nama_umum": "Veiltail",
             "nama_ilmiah": "Betta splendens var. veiltail",
             "deskripsi": "Ikan Betta dengan sirip ekor panjang yang menjuntai seperti kerudung",
-            "charakteristik": ["Sirip ekor sangat panjang", "Menjuntai ke bawah", "Elegan"],
+            "karakteristik": ["Sirip ekor sangat panjang", "Menjuntai ke bawah", "Elegan"],
             "habitat": "Air tawar tropis",
             "ukuran_avg": "6-8 cm",
             "gambar_contoh": "https://images.unsplash.com/photo-1491604612772-6853927639ef?w=300&h=200&fit=crop"
