@@ -90,8 +90,8 @@ const HomePage = () => {
         </div>
         
         {/* Decorative waves */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
+          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="pointer-events-none">
             <path d="M0 120L1440 120L1440 0C1200 40 960 60 720 45C480 30 240 -15 0 0L0 120Z" fill="rgb(248 250 252)" />
           </svg>
         </div>
