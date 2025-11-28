@@ -81,7 +81,10 @@ class SpeciesCreate(BaseModel):
 # CNN Model Class
 class FreshwaterCNN:
     def __init__(self, model_path=None):
-        self.fish_types = ["Lele", "Patin", "Nila", "Gurame"]
+        # IMPORTANT: Order must match training class indices (alphabetical)
+        # Training uses flow_from_directory which sorts alphabetically:
+        # {'Gurame': 0, 'Lele': 1, 'Nila': 2, 'Patin': 3}
+        self.fish_types = ["Gurame", "Lele", "Nila", "Patin"]
         self.model = None
         self.img_size = (224, 224)
 
