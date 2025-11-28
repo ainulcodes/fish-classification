@@ -148,13 +148,15 @@ MODEL_PATH = ROOT_DIR / 'models' / 'fish_classifier.h5'
 cnn_model = FreshwaterCNN(model_path=str(MODEL_PATH) if MODEL_PATH.exists() else None)
 
 # Helper Functions
-def create_thumbnail(image_path: Path, size=(150, 150)):
-    """Create thumbnail for uploaded image"""
+def create_thumbnail(image_path: Path, size=(600, 600)):
+    """Create thumbnail for uploaded image with high quality"""
     thumb_path = image_path.parent / f"thumb_{image_path.name}"
 
     with Image.open(image_path) as img:
+        # Use high-quality resampling and maintain aspect ratio
         img.thumbnail(size, Image.Resampling.LANCZOS)
-        img.save(thumb_path, "JPEG", quality=85)
+        # Save with high quality (95) to avoid blur
+        img.save(thumb_path, "JPEG", quality=95, optimize=True)
 
     return thumb_path
 
