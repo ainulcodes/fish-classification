@@ -64,10 +64,12 @@ class ClassificationResult(BaseModel):
 class ClassificationResponse(BaseModel):
     hasil_klasifikasi: str
     tingkat_keyakinan: float
+    is_recognized: bool  # True if confidence >= threshold, False otherwise
     species_id: Optional[str] = None
     gambar_url: str
     thumbnail_url: str
     riwayat_id: str
+    pesan: Optional[str] = None  # Additional message when not recognized
 
 class SpeciesCreate(BaseModel):
     nama_umum: str
@@ -146,6 +148,10 @@ class FreshwaterCNN:
 # Look for trained model in models directory
 MODEL_PATH = ROOT_DIR / 'models' / 'fish_classifier.h5'
 cnn_model = FreshwaterCNN(model_path=str(MODEL_PATH) if MODEL_PATH.exists() else None)
+
+# Confidence threshold for predictions
+# If prediction confidence is below this threshold, classify as "Tidak Dikenali"
+CONFIDENCE_THRESHOLD = float(os.environ.get('CONFIDENCE_THRESHOLD', 0.6))
 
 # Helper Functions
 def create_thumbnail(image_path: Path, size=(600, 600)):
@@ -262,15 +268,26 @@ async def classify_fish(file: UploadFile = File(...), db: Session = Depends(get_
         img_array = cnn_model.preprocess_image(contents)
         predicted_type, confidence = cnn_model.predict(img_array)
 
-        # Find matching species in database
-        species = db.query(DBFreshwaterSpecies).filter(DBFreshwaterSpecies.nama_umum == predicted_type).first()
-        species_id = species.id if species else None
+        # Check if confidence meets threshold
+        is_recognized = confidence >= CONFIDENCE_THRESHOLD
 
-        # Save classification result
+        # If not recognized, set appropriate values
+        if not is_recognized:
+            display_name = "Tidak Dikenali"
+            species_id = None
+            pesan = f"Gambar tidak dapat dikenali dengan keyakinan yang cukup. Model memprediksi '{predicted_type}' dengan keyakinan {round(confidence * 100, 1)}%, tetapi threshold minimum adalah {round(CONFIDENCE_THRESHOLD * 100, 1)}%. Pastikan gambar adalah salah satu dari: Lele, Patin, Nila, atau Gurame."
+        else:
+            display_name = predicted_type
+            # Find matching species in database
+            species = db.query(DBFreshwaterSpecies).filter(DBFreshwaterSpecies.nama_umum == predicted_type).first()
+            species_id = species.id if species else None
+            pesan = None
+
+        # Save classification result (save original prediction for analysis)
         classification_id = str(uuid.uuid4())
         classification = DBClassification(
             id=classification_id,
-            nama_ikan=predicted_type,
+            nama_ikan=display_name,  # Save "Tidak Dikenali" if not recognized
             tingkat_keyakinan=confidence,
             gambar_path=str(file_path),
             thumbnail_path=str(thumb_path),
@@ -283,12 +300,14 @@ async def classify_fish(file: UploadFile = File(...), db: Session = Depends(get_
 
         # Return response
         return ClassificationResponse(
-            hasil_klasifikasi=predicted_type,
+            hasil_klasifikasi=display_name,
             tingkat_keyakinan=round(confidence, 2),
+            is_recognized=is_recognized,
             species_id=species_id,
             gambar_url=f"/uploads/{unique_filename}",
             thumbnail_url=f"/uploads/thumb_{unique_filename}",
-            riwayat_id=classification_id
+            riwayat_id=classification_id,
+            pesan=pesan
         )
 
     except Exception as e:
@@ -356,6 +375,7 @@ async def startup_event():
     db = next(get_db())
     init_sample_data(db)  # Insert sample data
     logger.info("Data sampel ikan air tawar berhasil dimuat (4 spesies: Lele, Patin, Nila, Gurame)")
+    logger.info(f"Confidence threshold: {CONFIDENCE_THRESHOLD * 100}% (gambar dengan confidence di bawah ini akan ditolak)")
 
     # Check if model is loaded
     if cnn_model.model is None:
