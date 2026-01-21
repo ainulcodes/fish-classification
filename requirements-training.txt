@@ -8,6 +8,7 @@ keras==2.15.0
 # Image Processing
 Pillow==11.3.0
 numpy==2.2.6
+opencv-python==4.8.1.78
 
 # Plotting
 matplotlib==3.8.2

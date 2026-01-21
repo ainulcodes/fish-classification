@@ -9,10 +9,13 @@ Fitur Augmentasi:
 - Rotasi (berbagai sudut)
 - Flip horizontal dan vertikal
 - Zoom in/out
-- Brightness adjustment
+- Brightness, Contrast, Saturation adjustment
 - Shear transformation
 - Shift (horizontal dan vertikal)
-- Gaussian blur
+- Gaussian blur dan Motion blur
+- Color Space Transformations (HSV, RGB channel shifts)
+- Noise Injection (Gaussian, Salt & Pepper, Speckle)
+- Random Erasing
 - Kombinasi dari teknik di atas
 
 Cara menggunakan:
@@ -27,14 +30,15 @@ import os
 import sys
 import numpy as np
 from pathlib import Path
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import argparse
 from datetime import datetime
 from tqdm import tqdm
 import random
+import cv2
 
 # Konfigurasi
-CLASSES = ['Lele', 'Patin', 'Nila', 'Gurame']
+CLASSES = ['Lele', 'Patin', 'Nila', 'Gurame', 'Gabus']
 ROOT_DIR = Path(__file__).parent
 DATASET_DIR = ROOT_DIR / 'dataset'
 TRAIN_DIR = DATASET_DIR / 'train'
@@ -205,6 +209,233 @@ class ImageAugmentor:
             fillcolor=(0, 0, 0)
         ).resize((width, height), Image.LANCZOS)
 
+    def add_gaussian_noise(self, image, mean=0, sigma=None):
+        """
+        Tambahkan Gaussian noise ke gambar
+
+        Args:
+            image: PIL Image object
+            mean: Mean of noise distribution
+            sigma: Standard deviation (jika None, akan random antara 5 sampai 25)
+        """
+        if sigma is None:
+            sigma = random.uniform(5, 25)
+
+        # Convert to numpy array
+        img_array = np.array(image)
+
+        # Generate Gaussian noise
+        gaussian_noise = np.random.normal(mean, sigma, img_array.shape)
+
+        # Add noise to image
+        noisy_image = img_array + gaussian_noise
+
+        # Clip values to valid range [0, 255]
+        noisy_image = np.clip(noisy_image, 0, 255).astype(np.uint8)
+
+        return Image.fromarray(noisy_image)
+
+    def add_salt_pepper_noise(self, image, salt_prob=None, pepper_prob=None):
+        """
+        Tambahkan Salt & Pepper noise ke gambar
+
+        Args:
+            image: PIL Image object
+            salt_prob: Probability of salt noise (jika None, akan random)
+            pepper_prob: Probability of pepper noise (jika None, akan random)
+        """
+        if salt_prob is None:
+            salt_prob = random.uniform(0.001, 0.01)
+        if pepper_prob is None:
+            pepper_prob = random.uniform(0.001, 0.01)
+
+        # Convert to numpy array
+        img_array = np.array(image).copy()
+
+        # Generate random matrix
+        rnd = np.random.random(img_array.shape[:2])
+
+        # Add salt noise (white pixels)
+        img_array[rnd < salt_prob] = 255
+
+        # Add pepper noise (black pixels)
+        img_array[rnd > 1 - pepper_prob] = 0
+
+        return Image.fromarray(img_array)
+
+    def add_speckle_noise(self, image, variance=None):
+        """
+        Tambahkan Speckle noise ke gambar
+
+        Args:
+            image: PIL Image object
+            variance: Variance of noise (jika None, akan random antara 0.01 sampai 0.1)
+        """
+        if variance is None:
+            variance = random.uniform(0.01, 0.1)
+
+        # Convert to numpy array
+        img_array = np.array(image) / 255.0
+
+        # Generate speckle noise
+        noise = np.random.randn(*img_array.shape) * variance
+
+        # Add noise
+        noisy_image = img_array + img_array * noise
+
+        # Clip and convert back
+        noisy_image = np.clip(noisy_image * 255, 0, 255).astype(np.uint8)
+
+        return Image.fromarray(noisy_image)
+
+    def adjust_hsv(self, image, hue_shift=None, sat_shift=None, val_shift=None):
+        """
+        Adjust HSV color space
+
+        Args:
+            image: PIL Image object
+            hue_shift: Hue shift (-180 to 180, jika None akan random)
+            sat_shift: Saturation multiplier (jika None akan random 0.7-1.3)
+            val_shift: Value multiplier (jika None akan random 0.7-1.3)
+        """
+        # Convert PIL to OpenCV format
+        img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+        # Convert to HSV
+        img_hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV).astype(np.float32)
+
+        # Apply hue shift
+        if hue_shift is None:
+            hue_shift = random.uniform(-30, 30)
+        img_hsv[:, :, 0] = (img_hsv[:, :, 0] + hue_shift) % 180
+
+        # Apply saturation shift
+        if sat_shift is None:
+            sat_shift = random.uniform(0.7, 1.3)
+        img_hsv[:, :, 1] = np.clip(img_hsv[:, :, 1] * sat_shift, 0, 255)
+
+        # Apply value shift
+        if val_shift is None:
+            val_shift = random.uniform(0.7, 1.3)
+        img_hsv[:, :, 2] = np.clip(img_hsv[:, :, 2] * val_shift, 0, 255)
+
+        # Convert back to RGB
+        img_hsv = img_hsv.astype(np.uint8)
+        img_bgr = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2BGR)
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+        return Image.fromarray(img_rgb)
+
+    def rgb_channel_shift(self, image, r_shift=None, g_shift=None, b_shift=None):
+        """
+        Shift individual RGB channels
+
+        Args:
+            image: PIL Image object
+            r_shift, g_shift, b_shift: Shift values (-50 to 50, jika None akan random)
+        """
+        img_array = np.array(image).astype(np.float32)
+
+        if r_shift is None:
+            r_shift = random.uniform(-30, 30)
+        if g_shift is None:
+            g_shift = random.uniform(-30, 30)
+        if b_shift is None:
+            b_shift = random.uniform(-30, 30)
+
+        img_array[:, :, 0] = np.clip(img_array[:, :, 0] + r_shift, 0, 255)
+        img_array[:, :, 1] = np.clip(img_array[:, :, 1] + g_shift, 0, 255)
+        img_array[:, :, 2] = np.clip(img_array[:, :, 2] + b_shift, 0, 255)
+
+        return Image.fromarray(img_array.astype(np.uint8))
+
+    def motion_blur(self, image, kernel_size=None):
+        """
+        Apply motion blur effect
+
+        Args:
+            image: PIL Image object
+            kernel_size: Size of blur kernel (jika None, akan random antara 5 sampai 15)
+        """
+        if kernel_size is None:
+            kernel_size = random.choice([5, 7, 9, 11, 13, 15])
+
+        # Convert to OpenCV format
+        img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+        # Create motion blur kernel
+        kernel = np.zeros((kernel_size, kernel_size))
+        kernel[int((kernel_size - 1) / 2), :] = np.ones(kernel_size)
+        kernel = kernel / kernel_size
+
+        # Apply motion blur
+        blurred = cv2.filter2D(img_cv, -1, kernel)
+
+        # Convert back to RGB
+        img_rgb = cv2.cvtColor(blurred, cv2.COLOR_BGR2RGB)
+
+        return Image.fromarray(img_rgb)
+
+    def random_erasing(self, image, probability=0.5, sl=0.02, sh=0.4, r1=0.3):
+        """
+        Random Erasing augmentation (cutout)
+
+        Args:
+            image: PIL Image object
+            probability: Probability of applying erasing
+            sl: Min erasing area
+            sh: Max erasing area
+            r1: Aspect ratio
+        """
+        if random.random() > probability:
+            return image
+
+        img_array = np.array(image).copy()
+        height, width, channels = img_array.shape
+        area = height * width
+
+        for _ in range(100):
+            target_area = random.uniform(sl, sh) * area
+            aspect_ratio = random.uniform(r1, 1 / r1)
+
+            h = int(round(np.sqrt(target_area * aspect_ratio)))
+            w = int(round(np.sqrt(target_area / aspect_ratio)))
+
+            if w < width and h < height:
+                x1 = random.randint(0, width - w)
+                y1 = random.randint(0, height - h)
+
+                # Fill with random color or mean color
+                if random.random() > 0.5:
+                    # Random gray value
+                    img_array[y1:y1 + h, x1:x1 + w, :] = random.randint(0, 255)
+                else:
+                    # Mean color of image
+                    mean_color = img_array.mean(axis=(0, 1))
+                    img_array[y1:y1 + h, x1:x1 + w, :] = mean_color
+
+                return Image.fromarray(img_array)
+
+        return image
+
+    def color_jitter(self, image):
+        """
+        Apply random color jittering (combination of brightness, contrast, saturation)
+        """
+        # Random brightness
+        brightness_factor = random.uniform(0.7, 1.3)
+        image = ImageEnhance.Brightness(image).enhance(brightness_factor)
+
+        # Random contrast
+        contrast_factor = random.uniform(0.7, 1.3)
+        image = ImageEnhance.Contrast(image).enhance(contrast_factor)
+
+        # Random saturation
+        saturation_factor = random.uniform(0.7, 1.3)
+        image = ImageEnhance.Color(image).enhance(saturation_factor)
+
+        return image
+
 
 class DataAugmentor:
     """Class untuk mengatur proses augmentasi dataset"""
@@ -299,6 +530,107 @@ class DataAugmentor:
                 lambda img: self.augmentor.flip_horizontal(img),
                 lambda img: self.augmentor.flip_vertical(img),
                 lambda img: self.augmentor.adjust_brightness(img)
+            ],
+
+            # ===== NEW PIPELINES WITH NOISE & COLOR SPACE =====
+
+            # Pipeline 11: Gaussian noise + slight rotation
+            [
+                lambda img: self.augmentor.add_gaussian_noise(img, sigma=random.uniform(10, 20)),
+                lambda img: self.augmentor.rotate(img, random.uniform(-10, 10))
+            ],
+
+            # Pipeline 12: HSV adjustment + flip
+            [
+                lambda img: self.augmentor.adjust_hsv(img),
+                lambda img: self.augmentor.flip_horizontal(img)
+            ],
+
+            # Pipeline 13: RGB channel shift + brightness
+            [
+                lambda img: self.augmentor.rgb_channel_shift(img),
+                lambda img: self.augmentor.adjust_brightness(img)
+            ],
+
+            # Pipeline 14: Color jitter + zoom
+            [
+                lambda img: self.augmentor.color_jitter(img),
+                lambda img: self.augmentor.zoom(img, random.uniform(0.85, 1.15))
+            ],
+
+            # Pipeline 15: Motion blur + rotation
+            [
+                lambda img: self.augmentor.motion_blur(img),
+                lambda img: self.augmentor.rotate(img, random.uniform(-15, 15))
+            ],
+
+            # Pipeline 16: Salt & pepper noise + brightness
+            [
+                lambda img: self.augmentor.add_salt_pepper_noise(img),
+                lambda img: self.augmentor.adjust_brightness(img)
+            ],
+
+            # Pipeline 17: Speckle noise + contrast
+            [
+                lambda img: self.augmentor.add_speckle_noise(img, variance=random.uniform(0.02, 0.05)),
+                lambda img: self.augmentor.adjust_contrast(img)
+            ],
+
+            # Pipeline 18: Random erasing + flip
+            [
+                lambda img: self.augmentor.random_erasing(img, probability=0.5),
+                lambda img: self.augmentor.flip_horizontal(img)
+            ],
+
+            # Pipeline 19: HSV + Gaussian noise + rotation (complex)
+            [
+                lambda img: self.augmentor.adjust_hsv(img, hue_shift=random.uniform(-20, 20)),
+                lambda img: self.augmentor.add_gaussian_noise(img, sigma=random.uniform(5, 15)),
+                lambda img: self.augmentor.rotate(img, random.uniform(-20, 20))
+            ],
+
+            # Pipeline 20: Color jitter + noise + blur (very complex)
+            [
+                lambda img: self.augmentor.color_jitter(img),
+                lambda img: self.augmentor.add_speckle_noise(img, variance=0.03),
+                lambda img: self.augmentor.blur(img, random.uniform(0.5, 1.5))
+            ],
+
+            # Pipeline 21: RGB shift + motion blur + shift
+            [
+                lambda img: self.augmentor.rgb_channel_shift(img),
+                lambda img: self.augmentor.motion_blur(img, kernel_size=random.choice([5, 7, 9])),
+                lambda img: self.augmentor.shift(img)
+            ],
+
+            # Pipeline 22: HSV + zoom + random erasing
+            [
+                lambda img: self.augmentor.adjust_hsv(img),
+                lambda img: self.augmentor.zoom(img, random.uniform(0.9, 1.1)),
+                lambda img: self.augmentor.random_erasing(img, probability=0.3)
+            ],
+
+            # Pipeline 23: Rotation + HSV + Gaussian noise
+            [
+                lambda img: self.augmentor.rotate(img, random.uniform(-25, 25)),
+                lambda img: self.augmentor.adjust_hsv(img, sat_shift=random.uniform(0.8, 1.2)),
+                lambda img: self.augmentor.add_gaussian_noise(img, sigma=10)
+            ],
+
+            # Pipeline 24: Shear + color jitter + flip
+            [
+                lambda img: self.augmentor.shear(img),
+                lambda img: self.augmentor.color_jitter(img),
+                lambda img: self.augmentor.flip_vertical(img)
+            ],
+
+            # Pipeline 25: All-in-one extreme augmentation
+            [
+                lambda img: self.augmentor.rotate(img, random.uniform(-20, 20)),
+                lambda img: self.augmentor.adjust_hsv(img),
+                lambda img: self.augmentor.add_gaussian_noise(img, sigma=random.uniform(8, 15)),
+                lambda img: self.augmentor.zoom(img, random.uniform(0.85, 1.1)),
+                lambda img: self.augmentor.adjust_brightness(img)
             ]
         ]
 
@@ -376,12 +708,15 @@ class DataAugmentor:
         # Get all image files
         image_files = []
         for ext in ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']:
-            image_files.extend(list(class_dir.glob(ext)))
+            files = list(class_dir.glob(ext))
+            # Filter out already augmented images
+            files = [f for f in files if '_aug' not in f.stem]
+            image_files.extend(files)
 
         original_count = len(image_files)
         augmented_count = 0
 
-        print(f"\n{class_name}: {original_count} gambar original")
+        print(f"\n{class_name}: {original_count} gambar original (excluding augmented)")
 
         # Augment each image
         for image_path in tqdm(image_files, desc=f"Augmenting {class_name}", unit="img"):
@@ -514,7 +849,18 @@ Contoh penggunaan:
         help='Kelas yang akan diaugmentasi (default: semua kelas)'
     )
 
+    parser.add_argument(
+        '--data',
+        type=str,
+        choices=CLASSES,
+        help='Nama kelas ikan untuk augmentasi satu folder saja (alias for specific class)'
+    )
+
     args = parser.parse_args()
+
+    # Handle --data argument
+    if args.data:
+        args.classes = [args.data]
 
     print("\n" + "="*70)
     print("FISH CLASSIFICATION - DATA AUGMENTATION SCRIPT")
@@ -525,16 +871,11 @@ Contoh penggunaan:
         print("\nDataset check failed. Exiting...")
         return
 
-    # Confirm with user
+    # Konfigurasi
     print(f"\nKonfigurasi:")
     print(f"  - Augmentasi per gambar: {args.num_aug}")
     print(f"  - Output directory: {args.output_dir if args.output_dir else 'Same as input'}")
     print(f"  - Kelas: {', '.join(args.classes)}")
-
-    response = input("\nLanjutkan augmentasi? (y/n): ")
-    if response.lower() != 'y':
-        print("Augmentasi dibatalkan.")
-        return
 
     # Create augmentor
     augmentor = DataAugmentor(
@@ -542,6 +883,12 @@ Contoh penggunaan:
         output_dir=args.output_dir,
         classes=args.classes
     )
+
+    response = input("\nLanjutkan augmentasi? (y/n): ")
+    if response.lower() != 'y':
+        print("Augmentasi dibatalkan.")
+        return
+
 
     # Start augmentation
     start_time = datetime.now()

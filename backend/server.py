@@ -85,8 +85,8 @@ class FreshwaterCNN:
     def __init__(self, model_path=None):
         # IMPORTANT: Order must match training class indices (alphabetical)
         # Training uses flow_from_directory which sorts alphabetically:
-        # {'Gurame': 0, 'Lele': 1, 'Nila': 2, 'Patin': 3}
-        self.fish_types = ["Gurame", "Lele", "Nila", "Patin"]
+        # {'Gabus': 0, 'Gurame': 1, 'Lele': 2, 'Nila': 3, 'Patin': 4}
+        self.fish_types = ["Gabus", "Gurame", "Lele", "Nila", "Patin"]
         self.model = None
         self.img_size = (224, 224)
 
@@ -212,6 +212,16 @@ def init_sample_data(db: Session):
             "habitat": "Danau, waduk, rawa, kolam",
             "ukuran_avg": "40-60 cm",
             "gambar_contoh": "https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?w=300&h=200&fit=crop"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "nama_umum": "Gabus",
+            "nama_ilmiah": "Channa striata",
+            "deskripsi": "Ikan predator air tawar yang dikenal dengan sebutan snakehead. Memiliki kandungan albumin tinggi yang baik untuk penyembuhan luka. Ikan ini memiliki tarikan yang sangat kuat dan agresif.",
+            "karakteristik": ["Kepala menyerupai ular", "Tubuh memanjang silindris", "Corak loreng/totol", "Gigi tajam", "Karnivora agresif"],
+            "habitat": "Rawa, danau, sungai tenang, saluran air",
+            "ukuran_avg": "30-70 cm, bisa mencapai 1 meter",
+            "gambar_contoh": "https://api.minapoli.com/media/infomina/p/medium_d426b4c23d1d0ac62a688e4e36ee39c2.png"
         }
     ]
 

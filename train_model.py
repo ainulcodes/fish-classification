@@ -21,12 +21,14 @@ from tensorflow.keras import layers
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.applications import MobileNetV2
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
 
 # Konfigurasi
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32  # Will be adjusted based on dataset size
 EPOCHS = 50
-NUM_CLASSES = 4  # Lele, Patin, Nila, Gurame
+NUM_CLASSES = 5  # Lele, Patin, Nila, Gurame, Gabus
 
 # Paths
 ROOT_DIR = Path(__file__).parent
@@ -61,7 +63,7 @@ def check_dataset():
         print("      └── Gurame/")
         return False
 
-    classes = ['Lele', 'Patin', 'Nila', 'Gurame']
+    classes = ['Lele', 'Patin', 'Nila', 'Gurame', 'Gabus']
 
     print("\nDataset Training:")
     train_counts = {}
@@ -130,7 +132,7 @@ def create_data_generators():
 
     # Count total images to determine augmentation level
     total_images = 0
-    for cls in ['Lele', 'Patin', 'Nila', 'Gurame']:
+    for cls in ['Lele', 'Patin', 'Nila', 'Gurame', 'Gabus']:
         class_dir = TRAIN_DIR / cls
         if class_dir.exists():
             total_images += len(list(class_dir.glob('*.jpg'))) + \
@@ -388,6 +390,95 @@ def plot_training_history(history):
     print(f"Final Validation Loss: {final_val_loss:.4f}")
     print(f"\nModel saved to: {MODEL_PATH}")
 
+def evaluate_model(model, val_dir, batch_size=32):
+    """
+    Evaluasi model dengan Confusion Matrix dan Classification Report
+    """
+    print("\n" + "="*60)
+    print("EVALUATING MODEL")
+    print("="*60)
+
+    if not val_dir.exists():
+        print("Validation directory not found, skipping detailed evaluation.")
+        return
+
+    # Create evaluation generator (shuffle=False is CRITICAL for confusion matrix)
+    eval_datagen = ImageDataGenerator(rescale=1./255)
+    
+    eval_generator = eval_datagen.flow_from_directory(
+        val_dir,
+        target_size=IMG_SIZE,
+        batch_size=batch_size,
+        class_mode='categorical',
+        shuffle=False  # Important!
+    )
+
+    print("\nGenerating predictions...")
+    # Get predictions
+    predictions = model.predict(eval_generator)
+    y_pred = np.argmax(predictions, axis=1)
+    y_true = eval_generator.classes
+    class_labels = list(eval_generator.class_indices.keys())
+
+    # Classification Report
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred, target_names=class_labels))
+
+    # Confusion Matrix
+    cm = confusion_matrix(y_true, y_pred)
+    
+    # Plot Confusion Matrix
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_labels,
+                yticklabels=class_labels)
+    plt.title('Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    
+    # Save Confusion Matrix plot
+    plots_dir = ROOT_DIR / 'training_plots'
+    plots_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    cm_plot_path = plots_dir / f'confusion_matrix_{timestamp}.png'
+    plt.tight_layout()
+    plt.savefig(cm_plot_path)
+    print(f"\nConfusion Matrix plot saved to: {cm_plot_path}")
+
+    # --- NEW: Metrics Bar Chart ---
+    # Get metrics dict
+    report_dict = classification_report(y_true, y_pred, target_names=class_labels, output_dict=True)
+    
+    # Extract overall metrics
+    accuracy = report_dict['accuracy']
+    precision = report_dict['weighted avg']['precision']
+    recall = report_dict['weighted avg']['recall']
+    f1 = report_dict['weighted avg']['f1-score']
+    
+    metrics = [accuracy, precision, recall, f1]
+    metric_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+    colors = ['blue', 'green', 'orange', 'purple']
+    
+    plt.figure(figsize=(8, 6))
+    bars = plt.bar(metric_names, metrics, color=colors)
+    
+    plt.title('Model Performance Metrics')
+    plt.ylabel('Score')
+    plt.ylim(0, 1.0)  # Scale from 0 to 1
+    
+    # Add value labels on top of bars
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height,
+                 f'{height:.2f}',
+                 ha='center', va='bottom')
+    
+    # Save Metrics plot
+    metrics_plot_path = plots_dir / f'performance_metrics_{timestamp}.png'
+    plt.tight_layout()
+    plt.savefig(metrics_plot_path)
+    print(f"Performance Metrics bar chart saved to: {metrics_plot_path}")
+
 def main():
     """Main training function"""
     print("\n" + "="*60)
@@ -427,6 +518,15 @@ def main():
 
     # Plot results
     plot_training_history(history)
+
+    # Evaluate model
+    if VAL_DIR.exists():
+         # Use the model to evaluate on validation set
+         # We recreate generator to ensure shuffle=False
+         evaluate_model(model, VAL_DIR, BATCH_SIZE)
+    else:
+        print("\nNote: Skipping detailed evaluation (Confusion Matrix) because no separate validation folder found.")
+        print("To get detailed metrics, please organize data into train/ and validation/ folders.")
 
     print("\n" + "="*60)
     print("✓ TRAINING SELESAI!")
