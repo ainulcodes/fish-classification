@@ -28,7 +28,7 @@ import seaborn as sns
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32  # Will be adjusted based on dataset size
 EPOCHS = 50
-NUM_CLASSES = 5  # Lele, Patin, Nila, Gurame, Gabus
+NUM_CLASSES = 4  # Lele, Patin, Nila, Gurame
 
 # Paths
 ROOT_DIR = Path(__file__).parent
@@ -63,7 +63,7 @@ def check_dataset():
         print("      └── Gurame/")
         return False
 
-    classes = ['Lele', 'Patin', 'Nila', 'Gurame', 'Gabus']
+    classes = ['Lele', 'Patin', 'Nila', 'Gurame']
 
     print("\nDataset Training:")
     train_counts = {}
@@ -132,7 +132,7 @@ def create_data_generators():
 
     # Count total images to determine augmentation level
     total_images = 0
-    for cls in ['Lele', 'Patin', 'Nila', 'Gurame', 'Gabus']:
+    for cls in ['Lele', 'Patin', 'Nila', 'Gurame']:
         class_dir = TRAIN_DIR / cls
         if class_dir.exists():
             total_images += len(list(class_dir.glob('*.jpg'))) + \

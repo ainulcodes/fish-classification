@@ -38,7 +38,7 @@ import random
 import cv2
 
 # Konfigurasi
-CLASSES = ['Lele', 'Patin', 'Nila', 'Gurame', 'Gabus']
+CLASSES = ['Lele', 'Patin', 'Nila', 'Gurame']
 ROOT_DIR = Path(__file__).parent
 DATASET_DIR = ROOT_DIR / 'dataset'
 TRAIN_DIR = DATASET_DIR / 'train'
